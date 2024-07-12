@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/muesli/cache2go"
+	"github.com/SisyphusSQ/cache2go"
 )
 
 var fn = func(key interface{}) {

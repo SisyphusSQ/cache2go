@@ -1,3 +1,3 @@
-module github.com/muesli/cache2go
+module github.com/SisyphusSQ/cache2go
 
 go 1.22
