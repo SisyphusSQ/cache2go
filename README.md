@@ -1,10 +1,10 @@
 # cache2go
 
-[![Latest Release](https://img.shields.io/github/release/muesli/cache2go.svg)](https://github.com/muesli/cache2go/releases)
-[![Build Status](https://github.com/muesli/cache2go/workflows/build/badge.svg)](https://github.com/muesli/cache2go/actions)
-[![Coverage Status](https://coveralls.io/repos/github/muesli/cache2go/badge.svg?branch=master)](https://coveralls.io/github/muesli/cache2go?branch=master)
-[![Go ReportCard](https://goreportcard.com/badge/muesli/cache2go)](https://goreportcard.com/report/muesli/cache2go)
-[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](https://pkg.go.dev/github.com/muesli/cache2go)
+[![Latest Release](https://img.shields.io/github/release/muesli/cache2go.svg)](https://github.com/SisyphusSQ/cache2go/releases)
+[![Build Status](https://github.com/muesli/cache2go/workflows/build/badge.svg)](https://github.com/SisyphusSQ/cache2go/actions)
+[![Coverage Status](https://coveralls.io/repos/github/muesli/cache2go/badge.svg?branch=master)](https://coveralls.io/github/SisyphusSQ/cache2go?branch=master)
+[![Go ReportCard](https://goreportcard.com/badge/muesli/cache2go)](https://goreportcard.com/report/SisyphusSQ/cache2go)
+[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](https://pkg.go.dev/github.com/SisyphusSQ/cache2go)
 
 Concurrency-safe golang caching library with expiration capabilities.
 
@@ -15,22 +15,24 @@ See the [install instructions](https://golang.org/doc/install.html).
 
 To install cache2go, simply run:
 
-    go get github.com/muesli/cache2go
+    go get github.com/SisyphusSQ/cache2go
 
 To compile it from source:
 
-    cd $GOPATH/src/github.com/muesli/cache2go
+    cd $GOPATH/src/github.com/SisyphusSQ/cache2go
     go get -u -v
     go build && go test -v
 
 ## Example
+
 ```go
 package main
 
 import (
-	"github.com/muesli/cache2go"
 	"fmt"
 	"time"
+	
+	"github.com/SisyphusSQ/cache2go"
 )
 
 // Keys & values in cache2go can be of arbitrary types, e.g. a struct.
@@ -42,6 +44,7 @@ type myStruct struct {
 func main() {
 	// Accessing a new cache table for the first time will create it.
 	cache := cache2go.Cache("myCache")
+	defer cache.Close()
 
 	// We will put a new item in the cache. It will expire after
 	// not being accessed via Value(key) for more than 5 seconds.
@@ -83,5 +86,5 @@ To run this example, go to examples/mycachedapp/ and run:
 
     go run mycachedapp.go
 
-You can find a [few more examples here](https://github.com/muesli/cache2go/tree/master/examples).
+You can find a [few more examples here](https://github.com/SisyphusSQ/cache2go/tree/master/examples).
 Also see our test-cases in cache_test.go for further working examples.
