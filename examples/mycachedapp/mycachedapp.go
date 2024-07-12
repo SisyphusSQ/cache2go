@@ -16,6 +16,7 @@ type myStruct struct {
 func main() {
 	// Accessing a new cache table for the first time will create it.
 	cache := cache2go.Cache("myCache")
+	defer cache.Close()
 
 	// We will put a new item in the cache. It will expire after
 	// not being accessed via Value(key) for more than 5 seconds.
@@ -47,7 +48,9 @@ func main() {
 
 	// Remove the item from the cache.
 	cache.Delete("someKey")
+	fmt.Println("Delete finish")
 
 	// And wipe the entire cache table.
 	cache.Flush()
+	fmt.Println("Flush finish")
 }

@@ -30,6 +30,8 @@ type CacheItem struct {
 	accessedOn time.Time
 	// How often the item was accessed.
 	accessCount int64
+	// How often the item was modified.
+	modifyCount int64
 
 	// Callback method triggered right before removing the item from the cache
 	aboutToExpire []func(key interface{})
@@ -59,6 +61,18 @@ func (item *CacheItem) KeepAlive() {
 	defer item.Unlock()
 	item.accessedOn = time.Now()
 	item.accessCount++
+}
+
+func (item *CacheItem) AddCount() {
+	item.Lock()
+	defer item.Unlock()
+	item.accessedOn = time.Now()
+	item.accessCount++
+	item.modifyCount++
+}
+
+func (item *CacheItem) ModifyCount() int64 {
+	return item.modifyCount
 }
 
 // LifeSpan returns this item's expiration duration.

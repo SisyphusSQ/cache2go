@@ -14,6 +14,13 @@ import (
 	"time"
 )
 
+type expireType string
+
+const (
+	OnCreate     expireType = "onCreate"
+	OnLastAccess expireType = "onLastAccess"
+)
+
 // CacheTable is a table within the cache
 type CacheTable struct {
 	sync.RWMutex
@@ -23,10 +30,17 @@ type CacheTable struct {
 	// All cached items.
 	items map[interface{}]*CacheItem
 
+	// choice which kind of expire type
+	expireType expireType
+
+	// Deprecated
 	// Timer responsible for triggering cleanup.
 	cleanupTimer *time.Timer
+
 	// Current timer duration.
 	cleanupInterval time.Duration
+
+	cleanupTicker *time.Ticker
 
 	// The logger used for this table.
 	logger *log.Logger
@@ -35,8 +49,12 @@ type CacheTable struct {
 	loadData func(key interface{}, args ...interface{}) *CacheItem
 	// Callback method triggered when adding a new item to the cache.
 	addedItem []func(item *CacheItem)
+	// Callback method triggered when updating a new item to the cache.
+	updatedItem []func(item *CacheItem)
 	// Callback method triggered before deleting an item from the cache.
 	aboutToDeleteItem []func(item *CacheItem)
+
+	doneChan chan struct{}
 }
 
 // Count returns how many items are currently stored in the cache.
@@ -76,7 +94,7 @@ func (table *CacheTable) SetAddedItemCallback(f func(*CacheItem)) {
 	table.addedItem = append(table.addedItem, f)
 }
 
-//AddAddedItemCallback appends a new callback to the addedItem queue
+// AddAddedItemCallback appends a new callback to the addedItem queue
 func (table *CacheTable) AddAddedItemCallback(f func(*CacheItem)) {
 	table.Lock()
 	defer table.Unlock()
@@ -88,6 +106,31 @@ func (table *CacheTable) RemoveAddedItemCallbacks() {
 	table.Lock()
 	defer table.Unlock()
 	table.addedItem = nil
+}
+
+// SetUpdatedItemCallback configures a callback, which will be called every time
+// a new item is updated to the cache.
+func (table *CacheTable) SetUpdatedItemCallback(f func(*CacheItem)) {
+	if len(table.updatedItem) > 0 {
+		table.RemoveUpdatedItemCallbacks()
+	}
+	table.Lock()
+	defer table.Unlock()
+	table.updatedItem = append(table.updatedItem, f)
+}
+
+// AddUpdatedItemCallback appends a new callback to the updatedItem queue
+func (table *CacheTable) AddUpdatedItemCallback(f func(*CacheItem)) {
+	table.Lock()
+	defer table.Unlock()
+	table.updatedItem = append(table.updatedItem, f)
+}
+
+// RemoveUpdatedItemCallbacks empties the updated item callback queue
+func (table *CacheTable) RemoveUpdatedItemCallbacks() {
+	table.Lock()
+	defer table.Unlock()
+	table.updatedItem = nil
 }
 
 // SetAboutToDeleteItemCallback configures a callback, which will be called
@@ -125,58 +168,67 @@ func (table *CacheTable) SetLogger(logger *log.Logger) {
 // Expiration check loop, triggered by a self-adjusting timer.
 func (table *CacheTable) expirationCheck() {
 	table.Lock()
-	if table.cleanupTimer != nil {
-		table.cleanupTimer.Stop()
-	}
+	//if table.cleanupTimer != nil {
+	//	table.cleanupTimer.Stop()
+	//}
 	if table.cleanupInterval > 0 {
-		table.log("Expiration check triggered after", table.cleanupInterval, "for table", table.name)
+		table.log("Expiration check triggered after ", table.cleanupInterval, " for table ", table.name)
 	} else {
-		table.log("Expiration check installed for table", table.name)
+		table.log("Expiration check installed for table ", table.name)
 	}
 
 	// To be more accurate with timers, we would need to update 'now' on every
-	// loop iteration. Not sure it's really efficient though.
+	// loop iteration. Not sure whether it's really efficient though.
 	now := time.Now()
 	smallestDuration := 0 * time.Second
 	for key, item := range table.items {
 		// Cache values so we don't keep blocking the mutex.
 		item.RLock()
 		lifeSpan := item.lifeSpan
-		accessedOn := item.accessedOn
+		expireOn := table.getExpireTime(item)
 		item.RUnlock()
 
 		if lifeSpan == 0 {
 			continue
 		}
-		if now.Sub(accessedOn) >= lifeSpan {
+		if now.Sub(expireOn) >= lifeSpan {
 			// Item has excessed its lifespan.
 			table.deleteInternal(key)
 		} else {
 			// Find the item chronologically closest to its end-of-lifespan.
-			if smallestDuration == 0 || lifeSpan-now.Sub(accessedOn) < smallestDuration {
-				smallestDuration = lifeSpan - now.Sub(accessedOn)
+			if smallestDuration == 0 || lifeSpan-now.Sub(expireOn) < smallestDuration {
+				smallestDuration = lifeSpan - now.Sub(expireOn)
 			}
 		}
 	}
 
 	// Setup the interval for the next cleanup run.
-	table.cleanupInterval = smallestDuration
-	if smallestDuration > 0 {
-		table.cleanupTimer = time.AfterFunc(smallestDuration, func() {
-			go table.expirationCheck()
-		})
-	}
+	//table.cleanupInterval = smallestDuration
+	//if smallestDuration > 0 {
+	//	table.cleanupTimer = time.AfterFunc(smallestDuration, func() {
+	//		go table.expirationCheck()
+	//	})
+	//}
 	table.Unlock()
+}
+
+func (table *CacheTable) getExpireTime(item *CacheItem) (expireOn time.Time) {
+	if table.expireType == "" || table.expireType == OnLastAccess {
+		expireOn = item.accessedOn
+	} else if table.expireType == OnCreate {
+		expireOn = item.createdOn
+	}
+	return
 }
 
 func (table *CacheTable) addInternal(item *CacheItem) {
 	// Careful: do not run this method unless the table-mutex is locked!
 	// It will unlock it for the caller before running the callbacks and checks
-	table.log("Adding item with key", item.key, "and lifespan of", item.lifeSpan, "to table", table.name)
+	table.log("Adding item with key ", item.key, " and lifespan of ", item.lifeSpan, " to table ", table.name)
 	table.items[item.key] = item
 
 	// Cache values so we don't keep blocking the mutex.
-	expDur := table.cleanupInterval
+	// expDur := table.cleanupInterval
 	addedItem := table.addedItem
 	table.Unlock()
 
@@ -188,15 +240,16 @@ func (table *CacheTable) addInternal(item *CacheItem) {
 	}
 
 	// If we haven't set up any expiration check timer or found a more imminent item.
-	if item.lifeSpan > 0 && (expDur == 0 || item.lifeSpan < expDur) {
-		table.expirationCheck()
-	}
+	//if item.lifeSpan > 0 && (expDur == 0 || item.lifeSpan < expDur) {
+	//	table.expirationCheck()
+	//}
 }
 
 // Add adds a key/value pair to the cache.
 // Parameter key is the item's cache-key.
 // Parameter lifeSpan determines after which time period without an access the item
 // will get removed from the cache.
+// lifeSpan also become to a ttl value in expireType[onCreate]
 // Parameter data is the item's value.
 func (table *CacheTable) Add(key interface{}, lifeSpan time.Duration, data interface{}) *CacheItem {
 	item := NewCacheItem(key, lifeSpan, data)
@@ -206,6 +259,46 @@ func (table *CacheTable) Add(key interface{}, lifeSpan time.Duration, data inter
 	table.addInternal(item)
 
 	return item
+}
+
+func (table *CacheTable) AddExpireFunc(key interface{}, data interface{}, lifeSpan time.Duration, fn func(key interface{})) *CacheItem {
+	item := NewCacheItem(key, lifeSpan, data)
+	item.SetAboutToExpireCallback(fn)
+
+	// Add item to cache.
+	table.Lock()
+	table.addInternal(item)
+
+	return item
+}
+
+func (table *CacheTable) Update(key interface{}, data interface{}, lifeSpan time.Duration, isUpsert bool) (*CacheItem, error) {
+	r, err := table.Value(key)
+	if err != nil {
+		if isUpsert {
+			nr := table.Add(key, lifeSpan, data)
+			return nr, nil
+		} else {
+			return nil, ErrKeyNotFound
+		}
+	}
+
+	table.Lock()
+	table.log("Updating item with key ", r.key, " and lifespan of ", r.lifeSpan, " to table ", table.name)
+	r.data = data
+	r.AddCount()
+	table.items[key] = r
+	updatedItems := table.updatedItem
+	table.Unlock()
+
+	// Trigger callback after adding an item to cache.
+	if updatedItems != nil {
+		for _, callback := range updatedItems {
+			callback(r)
+		}
+	}
+
+	return r, nil
 }
 
 func (table *CacheTable) deleteInternal(key interface{}) (*CacheItem, error) {
@@ -234,7 +327,7 @@ func (table *CacheTable) deleteInternal(key interface{}) (*CacheItem, error) {
 	}
 
 	table.Lock()
-	table.log("Deleting item with key", key, "created on", r.createdOn, "and hit", r.accessCount, "times from table", table.name)
+	table.log("Deleting item with key ", key, " created on ", r.createdOn, " and hit ", r.accessCount, " times from table ", table.name)
 	delete(table.items, key)
 
 	return r, nil
@@ -284,8 +377,17 @@ func (table *CacheTable) Value(key interface{}, args ...interface{}) (*CacheItem
 	table.RUnlock()
 
 	if ok {
+		// check key whether is expired
+		if r.lifeSpan != 0 && time.Now().Sub(table.getExpireTime(r)) >= r.lifeSpan {
+			table.Lock()
+			defer table.Unlock()
+			table.deleteInternal(key)
+			return nil, ErrKeyExpired
+		}
+
 		// Update access counter and timestamp.
 		r.KeepAlive()
+
 		return r, nil
 	}
 
@@ -308,13 +410,13 @@ func (table *CacheTable) Flush() {
 	table.Lock()
 	defer table.Unlock()
 
-	table.log("Flushing table", table.name)
+	table.log("Flushing table ", table.name)
 
 	table.items = make(map[interface{}]*CacheItem)
-	table.cleanupInterval = 0
-	if table.cleanupTimer != nil {
-		table.cleanupTimer.Stop()
-	}
+	//table.cleanupInterval = 0
+	//if table.cleanupTimer != nil {
+	//	table.cleanupTimer.Stop()
+	//}
 }
 
 // CacheItemPair maps key to access counter
@@ -368,4 +470,11 @@ func (table *CacheTable) log(v ...interface{}) {
 	}
 
 	table.logger.Println(v...)
+}
+
+func (table *CacheTable) Close() {
+	table.log("Closing table ", table.name)
+	go func() {
+		table.doneChan <- struct{}{}
+	}()
 }
