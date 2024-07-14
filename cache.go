@@ -35,7 +35,7 @@ func Cache(table string) *CacheTable {
 
 			t = &CacheTable{
 				name:            table,
-				items:           make(map[interface{}]*CacheItem),
+				items:           make(map[any]*CacheItem),
 				cleanupInterval: cleanup,
 				cleanupTicker:   time.NewTicker(cleanup),
 				doneChan:        make(chan struct{}),
@@ -85,7 +85,7 @@ func NewCacheTable(table string, e expireType, cleanup time.Duration) *CacheTabl
 
 			t = &CacheTable{
 				name:            table,
-				items:           make(map[interface{}]*CacheItem),
+				items:           make(map[any]*CacheItem),
 				expireType:      e,
 				cleanupInterval: cleanup,
 				cleanupTicker:   time.NewTicker(cleanup),

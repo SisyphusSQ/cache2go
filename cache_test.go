@@ -139,7 +139,7 @@ func TestNotFoundAddConcurrency(t *testing.T) {
 
 	t.Log(added, idle)
 
-	table.Foreach(func(key interface{}, item *CacheItem) {
+	table.Foreach(func(key any, item *CacheItem) {
 		v, _ := item.Data().(int)
 		k, _ := key.(int)
 		t.Logf("%02x  %04x\n", k, v)
@@ -235,7 +235,7 @@ func TestCount(t *testing.T) {
 func TestDataLoader(t *testing.T) {
 	// setup a cache with a configured data-loader
 	table := Cache("testDataLoader")
-	table.SetDataLoader(func(key interface{}, args ...interface{}) *CacheItem {
+	table.SetDataLoader(func(key any, args ...any) *CacheItem {
 		var item *CacheItem
 		if key.(string) != "nil" {
 			val := k + key.(string)
@@ -327,13 +327,13 @@ func TestCallbacks(t *testing.T) {
 	})
 	// add an item to the cache and setup its AboutToExpire handler
 	i := table.Add(k, 500*time.Millisecond, v)
-	i.SetAboutToExpireCallback(func(key interface{}) {
+	i.SetAboutToExpireCallback(func(key any) {
 		m.Lock()
 		expired = true
 		m.Unlock()
 	})
 
-	i.SetAboutToExpireCallback(func(key interface{}) {
+	i.SetAboutToExpireCallback(func(key any) {
 		m.Lock()
 		calledExpired = true
 		m.Unlock()
@@ -396,12 +396,12 @@ func TestCallbackQueue(t *testing.T) {
 	})
 
 	i := table.Add(k, 500*time.Millisecond, v)
-	i.AddAboutToExpireCallback(func(key interface{}) {
+	i.AddAboutToExpireCallback(func(key any) {
 		m.Lock()
 		expired = true
 		m.Unlock()
 	})
-	i.AddAboutToExpireCallback(func(key interface{}) {
+	i.AddAboutToExpireCallback(func(key any) {
 		m.Lock()
 		calledExpired = true
 		m.Unlock()
@@ -427,7 +427,7 @@ func TestCallbackQueue(t *testing.T) {
 	secondItemKey := "itemKey02"
 	expired = false
 	i = table.Add(secondItemKey, 500*time.Millisecond, v)
-	i.SetAboutToExpireCallback(func(key interface{}) {
+	i.SetAboutToExpireCallback(func(key any) {
 		m.Lock()
 		expired = true
 		m.Unlock()

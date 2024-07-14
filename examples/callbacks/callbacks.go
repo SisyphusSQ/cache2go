@@ -43,7 +43,7 @@ func main() {
 	res = cache.Add("anotherKey", 3*time.Second, "This is another test")
 
 	// This callback will be triggered when the item is about to expire
-	res.SetAboutToExpireCallback(func(key interface{}) {
+	res.SetAboutToExpireCallback(func(key any) {
 		fmt.Println("About to expire:", key.(string))
 	})
 

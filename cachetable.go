@@ -28,7 +28,7 @@ type CacheTable struct {
 	// The table's name.
 	name string
 	// All cached items.
-	items map[interface{}]*CacheItem
+	items map[any]*CacheItem
 
 	// choice which kind of expire type
 	expireType expireType
@@ -46,7 +46,7 @@ type CacheTable struct {
 	logger *log.Logger
 
 	// Callback method triggered when trying to load a non-existing key.
-	loadData func(key interface{}, args ...interface{}) *CacheItem
+	loadData func(key any, args ...any) *CacheItem
 	// Callback method triggered when adding a new item to the cache.
 	addedItem []func(item *CacheItem)
 	// Callback method triggered when updating a new item to the cache.
@@ -65,7 +65,7 @@ func (table *CacheTable) Count() int {
 }
 
 // Foreach all items
-func (table *CacheTable) Foreach(trans func(key interface{}, item *CacheItem)) {
+func (table *CacheTable) Foreach(trans func(key any, item *CacheItem)) {
 	table.RLock()
 	defer table.RUnlock()
 
@@ -77,7 +77,7 @@ func (table *CacheTable) Foreach(trans func(key interface{}, item *CacheItem)) {
 // SetDataLoader configures a data-loader callback, which will be called when
 // trying to access a non-existing key. The key and 0...n additional arguments
 // are passed to the callback function.
-func (table *CacheTable) SetDataLoader(f func(interface{}, ...interface{}) *CacheItem) {
+func (table *CacheTable) SetDataLoader(f func(any, ...any) *CacheItem) {
 	table.Lock()
 	defer table.Unlock()
 	table.loadData = f
@@ -251,7 +251,7 @@ func (table *CacheTable) addInternal(item *CacheItem) {
 // will get removed from the cache.
 // lifeSpan also become to a ttl value in expireType[onCreate]
 // Parameter data is the item's value.
-func (table *CacheTable) Add(key interface{}, lifeSpan time.Duration, data interface{}) *CacheItem {
+func (table *CacheTable) Add(key any, lifeSpan time.Duration, data any) *CacheItem {
 	item := NewCacheItem(key, lifeSpan, data)
 
 	// Add item to cache.
@@ -261,7 +261,7 @@ func (table *CacheTable) Add(key interface{}, lifeSpan time.Duration, data inter
 	return item
 }
 
-func (table *CacheTable) AddExpireFunc(key interface{}, data interface{}, lifeSpan time.Duration, fn func(key interface{})) *CacheItem {
+func (table *CacheTable) AddExpireFunc(key any, data any, lifeSpan time.Duration, fn func(key any)) *CacheItem {
 	item := NewCacheItem(key, lifeSpan, data)
 	item.SetAboutToExpireCallback(fn)
 
@@ -272,7 +272,7 @@ func (table *CacheTable) AddExpireFunc(key interface{}, data interface{}, lifeSp
 	return item
 }
 
-func (table *CacheTable) Update(key interface{}, data interface{}, lifeSpan time.Duration, isUpsert bool) (*CacheItem, error) {
+func (table *CacheTable) Update(key any, data any, lifeSpan time.Duration, isUpsert bool) (*CacheItem, error) {
 	r, err := table.Value(key)
 	if err != nil {
 		if isUpsert {
@@ -301,7 +301,7 @@ func (table *CacheTable) Update(key interface{}, data interface{}, lifeSpan time
 	return r, nil
 }
 
-func (table *CacheTable) deleteInternal(key interface{}) (*CacheItem, error) {
+func (table *CacheTable) deleteInternal(key any) (*CacheItem, error) {
 	r, ok := table.items[key]
 	if !ok {
 		return nil, ErrKeyNotFound
@@ -334,27 +334,26 @@ func (table *CacheTable) deleteInternal(key interface{}) (*CacheItem, error) {
 }
 
 // Delete an item from the cache.
-func (table *CacheTable) Delete(key interface{}) (*CacheItem, error) {
+func (table *CacheTable) Delete(key any) (*CacheItem, error) {
 	table.Lock()
 	defer table.Unlock()
 
 	return table.deleteInternal(key)
 }
 
-// Exists returns whether an item exists in the cache. Unlike the Value method
-// Exists neither tries to fetch data via the loadData callback nor does it
-// keep the item alive in the cache.
-func (table *CacheTable) Exists(key interface{}) bool {
+// Exists returns whether an item exists in the cache.
+func (table *CacheTable) Exists(key any) bool {
 	table.RLock()
 	defer table.RUnlock()
-	_, ok := table.items[key]
 
-	return ok
+	// if err, key is expired or not existed
+	_, err := table.Value(key)
+	return err == nil
 }
 
 // NotFoundAdd checks whether an item is not yet cached. Unlike the Exists
 // method this also adds data if the key could not be found.
-func (table *CacheTable) NotFoundAdd(key interface{}, lifeSpan time.Duration, data interface{}) bool {
+func (table *CacheTable) NotFoundAdd(key any, lifeSpan time.Duration, data any) bool {
 	table.Lock()
 
 	if _, ok := table.items[key]; ok {
@@ -370,7 +369,7 @@ func (table *CacheTable) NotFoundAdd(key interface{}, lifeSpan time.Duration, da
 
 // Value returns an item from the cache and marks it to be kept alive. You can
 // pass additional arguments to your DataLoader callback function.
-func (table *CacheTable) Value(key interface{}, args ...interface{}) (*CacheItem, error) {
+func (table *CacheTable) Value(key any, args ...any) (*CacheItem, error) {
 	table.RLock()
 	r, ok := table.items[key]
 	loadData := table.loadData
@@ -412,7 +411,7 @@ func (table *CacheTable) Flush() {
 
 	table.log("Flushing table ", table.name)
 
-	table.items = make(map[interface{}]*CacheItem)
+	table.items = make(map[any]*CacheItem)
 	//table.cleanupInterval = 0
 	//if table.cleanupTimer != nil {
 	//	table.cleanupTimer.Stop()
@@ -421,7 +420,7 @@ func (table *CacheTable) Flush() {
 
 // CacheItemPair maps key to access counter
 type CacheItemPair struct {
-	Key         interface{}
+	Key         any
 	AccessCount int64
 }
 
@@ -464,12 +463,18 @@ func (table *CacheTable) MostAccessed(count int64) []*CacheItem {
 }
 
 // Internal logging method for convenience.
-func (table *CacheTable) log(v ...interface{}) {
+func (table *CacheTable) log(v ...any) {
 	if table.logger == nil {
 		return
 	}
 
 	table.logger.Println(v...)
+}
+
+func (table *CacheTable) Length() int {
+	table.Lock()
+	defer table.Unlock()
+	return len(table.items)
 }
 
 func (table *CacheTable) Close() {

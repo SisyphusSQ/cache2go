@@ -7,7 +7,7 @@ import (
 	"github.com/SisyphusSQ/cache2go"
 )
 
-var fn = func(key interface{}) {
+var fn = func(key any) {
 	fmt.Println("About to expire:", key.(string))
 }
 
@@ -36,7 +36,7 @@ func main() {
 		fmt.Println("Error retrieving value from cache:", err)
 	}
 
-	//res.SetAboutToExpireCallback(func(key interface{}) {
+	//res.SetAboutToExpireCallback(func(key any) {
 	//	fmt.Println("About to expire:", key.(string))
 	//})
 

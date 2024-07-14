@@ -18,9 +18,9 @@ type CacheItem struct {
 	sync.RWMutex
 
 	// The item's key.
-	key interface{}
+	key any
 	// The item's data.
-	data interface{}
+	data any
 	// How long will the item live in the cache when not being accessed/kept alive.
 	lifeSpan time.Duration
 
@@ -34,7 +34,7 @@ type CacheItem struct {
 	modifyCount int64
 
 	// Callback method triggered right before removing the item from the cache
-	aboutToExpire []func(key interface{})
+	aboutToExpire []func(key any)
 }
 
 // NewCacheItem returns a newly created CacheItem.
@@ -42,7 +42,7 @@ type CacheItem struct {
 // Parameter lifeSpan determines after which time period without an access the item
 // will get removed from the cache.
 // Parameter data is the item's value.
-func NewCacheItem(key interface{}, lifeSpan time.Duration, data interface{}) *CacheItem {
+func NewCacheItem(key any, lifeSpan time.Duration, data any) *CacheItem {
 	t := time.Now()
 	return &CacheItem{
 		key:           key,
@@ -102,20 +102,20 @@ func (item *CacheItem) AccessCount() int64 {
 }
 
 // Key returns the key of this cached item.
-func (item *CacheItem) Key() interface{} {
+func (item *CacheItem) Key() any {
 	// immutable
 	return item.key
 }
 
 // Data returns the value of this cached item.
-func (item *CacheItem) Data() interface{} {
+func (item *CacheItem) Data() any {
 	// immutable
 	return item.data
 }
 
 // SetAboutToExpireCallback configures a callback, which will be called right
 // before the item is about to be removed from the cache.
-func (item *CacheItem) SetAboutToExpireCallback(f func(interface{})) {
+func (item *CacheItem) SetAboutToExpireCallback(f func(any)) {
 	if len(item.aboutToExpire) > 0 {
 		item.RemoveAboutToExpireCallback()
 	}
@@ -125,7 +125,7 @@ func (item *CacheItem) SetAboutToExpireCallback(f func(interface{})) {
 }
 
 // AddAboutToExpireCallback appends a new callback to the AboutToExpire queue
-func (item *CacheItem) AddAboutToExpireCallback(f func(interface{})) {
+func (item *CacheItem) AddAboutToExpireCallback(f func(any)) {
 	item.Lock()
 	defer item.Unlock()
 	item.aboutToExpire = append(item.aboutToExpire, f)
